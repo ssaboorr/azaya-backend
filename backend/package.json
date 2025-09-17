@@ -5,11 +5,11 @@
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "nodemon src/server.ts",
+    "dev": "nodemon --exec ts-node server.ts",
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
+    "lint": "eslint **/*.ts",
+    "lint:fix": "eslint **/*.ts --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "clean": "rimraf dist"
