@@ -1,8 +1,12 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import connectDB from './db/config';
 
 // Load environment variables
 dotenv.config();
+
+// Connect to MongoDB
+connectDB();
 
 const app = express();
 
