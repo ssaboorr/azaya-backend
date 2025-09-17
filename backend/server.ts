@@ -5,6 +5,7 @@ import cloudinary from './config/cloudinary'; // Initialize Cloudinary configura
 import { User, Document, Signature } from './models';
 import { errorHandler, notFound } from './middleware/errorMiddlewares';
 import userRoutes from './routes/userRoutes';
+import authRoutes from './routes/authRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -146,6 +147,7 @@ app.get('/config/cloudinary', (req, res) => {
 // });
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
 app.use(notFound);

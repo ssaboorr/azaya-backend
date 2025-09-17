@@ -103,3 +103,6 @@ public/uploads/
 # Database
 *.sqlite
 *.sqlite3
+
+
+postman-collection.json
