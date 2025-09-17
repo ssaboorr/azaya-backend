@@ -4,6 +4,7 @@ import connectDB from './db/config';
 import cloudinary from './config/cloudinary'; // Initialize Cloudinary configuration
 import { User, Document, Signature } from './models';
 import { errorHandler, notFound } from './middleware/errorMiddlewares';
+import userRoutes from './routes/userRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -144,6 +145,8 @@ app.get('/config/cloudinary', (req, res) => {
 //   }
 // });
 
+// Routes
+app.use('/api/users', userRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
