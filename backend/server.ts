@@ -2,6 +2,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import connectDB from './db/config';
 import cloudinary from './config/cloudinary'; // Initialize Cloudinary configuration
+import { User, Document, Signature } from './models';
+import { errorHandler, notFound } from './middleware/errorMiddlewares';
 
 // Load environment variables
 dotenv.config();
@@ -141,6 +143,10 @@ app.get('/config/cloudinary', (req, res) => {
 //     });
 //   }
 // });
+
+
+app.use(notFound);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 8000;
 
