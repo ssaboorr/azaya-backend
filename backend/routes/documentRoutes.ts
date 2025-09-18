@@ -6,7 +6,8 @@ import {
   updateDocument,
   deleteDocument,
   getDocumentsByUploader,
-  getMyDocuments
+  getMyDocuments,
+  getDocumentsBySigner
 } from '../controllers/documentController';
 import { protect, uploaderOnly, uploaderOrSigner } from '../middleware/authMiddleware';
 import { validatePDFUpload } from '../middleware/uploadMiddleware';
@@ -35,6 +36,11 @@ router.get('/my-documents', uploaderOrSigner, getMyDocuments);
 // @route   GET /api/documents/uploader/:uploaderId
 // @access  Private (Uploader/Signer)
 router.get('/uploader/:uploaderId', uploaderOrSigner, getDocumentsByUploader);
+
+// @desc    Get documents by uploader ID
+// @route   GET /api/documents/uploader/:uploaderId
+// @access  Private (Uploader/Signer)
+router.get('/signer/:signerId', uploaderOrSigner,getDocumentsBySigner);
 
 // @desc    Get document by ID
 // @route   GET /api/documents/:id

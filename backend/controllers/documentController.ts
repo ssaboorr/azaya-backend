@@ -330,6 +330,73 @@ const getDocumentsByUploader = asyncHandler(async (req: AuthRequest, res: Respon
   }
 });
 
+// @desc    Get documents by uploader
+// @route   GET /api/documents/uploader/:uploaderId
+// @access  Private
+const getDocumentsBySigner = asyncHandler(async (req: AuthRequest, res: Response) => {
+  try {
+    const { signerId } = req.params;
+    const { page = 1, limit = 10, status } = req.query;
+
+    // Validate uploaderId
+    if (!signerId) {
+      res.status(400);
+      throw new Error('Uploader ID is required');
+    }
+
+    console.log("signerId", signerId);
+
+    // Build query
+    const query: any = { assignedSigner: signerId };
+    
+    // Add status filter if provided
+    if (status && ['pending', 'signed', 'verified', 'rejected'].includes(status as string)) {
+      query.status = status;
+    }
+
+    // Calculate pagination
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Get documents with pagination
+    const documents = await Document.find(query)
+      .populate('uploader', 'name email')
+      .populate('assignedSigner', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    // Get total count for pagination
+    const total = await Document.countDocuments(query);
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    res.json({
+      success: true,
+      data: {
+        documents,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          totalDocuments: total,
+          hasNextPage,
+          hasPrevPage,
+          limit: limitNum
+        }
+      },
+      message: `Found ${documents.length} documents for uploader`
+    });
+  } catch (error) {
+    console.error('Error fetching documents by uploader:', error);
+    res.status(500);
+    throw new Error('Failed to fetch documents by uploader');
+  }
+});
+
 // @desc    Get documents by current user (uploader)
 // @route   GET /api/documents/my-documents
 // @access  Private
@@ -395,5 +462,6 @@ export {
   updateDocument,
   deleteDocument,
   getDocumentsByUploader,
-  getMyDocuments
+  getMyDocuments,
+  getDocumentsBySigner
 };
