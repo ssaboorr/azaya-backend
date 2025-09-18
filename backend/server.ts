@@ -6,6 +6,7 @@ import { User, Document, Signature } from './models';
 import { errorHandler, notFound } from './middleware/errorMiddlewares';
 import userRoutes from './routes/userRoutes';
 import authRoutes from './routes/authRoutes';
+import documentRoutes from './routes/documentRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -63,21 +64,8 @@ app.get('/config/cloudinary', (req, res) => {
 //   try {
 //     console.log('🧪 Testing Cloudinary upload...');
     
-//     // Create a fresh cloudinary instance for testing
-//     const { v2: testCloudinary } = require('cloudinary');
-    
-//     // Configure with the exact values from your example
-//     testCloudinary.config({
-//       cloud_name: 'dibzxgbun',
-//       api_key: '549747455999693',
-//       api_secret: process.env.CLOUD_API_SEC || process.env.CLOUDINARY_API_SECRET,
-//       secure: true,
-//     });
-    
-//     console.log('Test config:', testCloudinary.config());
-    
-//     // Upload a test image from URL using the test instance
-//     const uploadResult = await testCloudinary.uploader.upload(
+//     // Upload a test image from URL
+//     const uploadResult = await cloudinary.uploader.upload(
 //       'https://res.cloudinary.com/demo/image/upload/getting-started/shoes.jpg',
 //       {
 //         public_id: 'test_shoes_' + Date.now(),
@@ -87,14 +75,14 @@ app.get('/config/cloudinary', (req, res) => {
 
 //     console.log('✅ Upload successful:', uploadResult.public_id);
 
-//     // Generate optimized URL using the test instance
-//     const optimizeUrl = testCloudinary.url(uploadResult.public_id, {
+//     // Generate optimized URL
+//     const optimizeUrl = cloudinary.url(uploadResult.public_id, {
 //       fetch_format: 'auto',
 //       quality: 'auto'
 //     });
 
-//     // Generate auto-crop URL using the test instance
-//     const autoCropUrl = testCloudinary.url(uploadResult.public_id, {
+//     // Generate auto-crop URL
+//     const autoCropUrl = cloudinary.url(uploadResult.public_id, {
 //       crop: 'auto',
 //       gravity: 'auto',
 //       width: 500,
@@ -124,18 +112,10 @@ app.get('/config/cloudinary', (req, res) => {
 //   } catch (error) {
 //     console.error('❌ Cloudinary test failed:', error);
     
-//     // Get more details about the error
-//     let errorDetails = 'Unknown error';
-//     if (error instanceof Error) {
-//       errorDetails = error.message;
-//     } else if (typeof error === 'object' && error !== null) {
-//       errorDetails = JSON.stringify(error);
-//     }
-    
 //     res.status(500).json({
 //       status: 'error',
 //       message: 'Cloudinary test failed',
-//       error: errorDetails,
+//       error: error instanceof Error ? error.message : 'Unknown error',
 //       cloudinaryConfig: {
 //         hasCloudName: !!cloudinary.config().cloud_name,
 //         hasApiKey: !!cloudinary.config().api_key,
@@ -149,6 +129,7 @@ app.get('/config/cloudinary', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/documents', documentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
