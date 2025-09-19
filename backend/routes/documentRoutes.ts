@@ -7,7 +7,8 @@ import {
   deleteDocument,
   getDocumentsByUploader,
   getMyDocuments,
-  getDocumentsBySigner
+  getDocumentsBySigner,
+  updateDocumentStatus
 } from '../controllers/documentController';
 import { protect, uploaderOnly, uploaderOrSigner } from '../middleware/authMiddleware';
 import { validatePDFUpload } from '../middleware/uploadMiddleware';
@@ -51,6 +52,11 @@ router.get('/:id', uploaderOrSigner, getDocumentById);
 // @route   PUT /api/documents/:id
 // @access  Private (Uploader/Signer)
 router.put('/:id', uploaderOrSigner, validatePDFUpload, updateDocument);
+
+// @desc    Update document status and reason
+// @route   PUT /api/documents/:id/status
+// @access  Private (Uploader/Signer)
+router.put('/:id/status', uploaderOrSigner, updateDocumentStatus);
 
 // @desc    Delete document
 // @route   DELETE /api/documents/:id

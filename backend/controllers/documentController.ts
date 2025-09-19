@@ -625,6 +625,94 @@ const getMyDocuments = asyncHandler(async (req: AuthRequest, res: Response) => {
   }
 });
 
+// @desc    Update document status and reason
+// @route   PUT /api/documents/:id/status
+// @access  Private (Uploader/Signer)
+const updateDocumentStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { status, reason } = req.body;
+  
+  // Validate required fields
+  if (!status) {
+    res.status(400);
+    throw new Error('Please provide status');
+  }
+  
+  // Validate status value
+  const validStatuses = ['pending', 'signed', 'verified', 'rejected'];
+  if (!validStatuses.includes(status)) {
+    res.status(400);
+    throw new Error('Invalid status. Must be one of: pending, signed, verified, rejected');
+  }
+  
+  // Find the document
+  const document = await Document.findById(req.params.id);
+  if (!document) {
+    res.status(404);
+    throw new Error('Document not found');
+  }
+  
+  // Check if user can access this document
+  const canAccess = 
+    document.uploader.toString() === req.user!.id ||
+    document.assignedSigner.toString() === req.user!.id;
+  
+  if (!canAccess) {
+    res.status(403);
+    throw new Error('Access denied');
+  }
+  
+  // Role-based status update permissions
+  const userRole = req.user!.role;
+  
+  // Uploaders can set: pending, verified, rejected
+  if (userRole === 'uploader') {
+    if (!['pending', 'verified', 'rejected'].includes(status)) {
+      res.status(403);
+      throw new Error('Uploaders can only set status to: pending, verified, or rejected');
+    }
+  }
+  
+  // Signers can set: signed, rejected
+  if (userRole === 'signer') {
+    if (!['signed', 'rejected'].includes(status)) {
+      res.status(403);
+      throw new Error('Signers can only set status to: signed or rejected');
+    }
+  }
+  
+  document.status = status;
+  
+  if (status === 'rejected') {
+    if (!reason) {
+      res.status(400);
+      throw new Error('Rejection reason is required when status is rejected');
+    }
+    document.rejectionReason = reason;
+  } else {
+    document.rejectionReason = undefined;
+  }
+  
+  if (status === 'signed' && !document.signedAt) {
+    document.signedAt = new Date();
+  }
+  
+  if (status === 'verified' && !document.verifiedAt) {
+    document.verifiedAt = new Date();
+  }
+  
+  const updatedDocument = await document.save();
+  
+  const populatedDocument = await Document.findById(updatedDocument._id)
+    .populate('uploader', 'name email role')
+    .populate('assignedSigner', 'name email role');
+  
+  res.json({
+    success: true,
+    data: populatedDocument,
+    message: `Document status updated to ${status} successfully`
+  });
+});
+
 export {
   uploadDocument,
   getDocuments,
@@ -633,5 +721,6 @@ export {
   deleteDocument,
   getDocumentsByUploader,
   getMyDocuments,
-  getDocumentsBySigner
+  getDocumentsBySigner,
+  updateDocumentStatus
 };
