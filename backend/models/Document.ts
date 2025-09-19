@@ -23,6 +23,27 @@ export interface IDocument extends MongoDocument {
   signedAt?: Date;
   verifiedAt?: Date;
   rejectionReason?: string;
+  
+  // Additional dynamic fields
+  description?: string;
+  category?: string;
+  priority?: string;
+  dueDate?: Date;
+  tags?: string[];
+  metadata?: Record<string, any>;
+  notes?: string;
+  customFields?: Record<string, any>;
+  expiryDate?: Date;
+  version?: string;
+  department?: string;
+  project?: string;
+  client?: string;
+  reference?: string;
+  type?: string;
+  
+  // Allow any custom fields that start with 'custom_'
+  [key: `custom_${string}`]: any;
+  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -104,9 +125,57 @@ const documentSchema = new Schema<IDocument>({
   },
   rejectionReason: {
     type: String
+  },
+  
+  // Additional dynamic fields
+  description: {
+    type: String
+  },
+  category: {
+    type: String
+  },
+  priority: {
+    type: String
+  },
+  dueDate: {
+    type: Date
+  },
+  tags: [{
+    type: String
+  }],
+  metadata: {
+    type: Schema.Types.Mixed
+  },
+  notes: {
+    type: String
+  },
+  customFields: {
+    type: Schema.Types.Mixed
+  },
+  expiryDate: {
+    type: Date
+  },
+  version: {
+    type: String
+  },
+  department: {
+    type: String
+  },
+  project: {
+    type: String
+  },
+  client: {
+    type: String
+  },
+  reference: {
+    type: String
+  },
+  type: {
+    type: String
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  strict: false // Allow additional fields not defined in schema
 });
 
 export default mongoose.model<IDocument>('Document', documentSchema);

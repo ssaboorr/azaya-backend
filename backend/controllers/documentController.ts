@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
-import { Document, User } from '../models';
+import { Document, User, Signature } from '../models';
 import cloudinary from '../config/cloudinary';
 import { AuthRequest } from '../middleware/authMiddleware';
 
@@ -8,11 +8,21 @@ import { AuthRequest } from '../middleware/authMiddleware';
 // @route   POST /api/documents/upload
 // @access  Private (Uploader only)
  const uploadDocument = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { title, signerEmail, signatureFields } = req.body;
-  console.log("upload hit")
-  if (!title || !signerEmail) {
+  // Extract all fields from the request body dynamically
+  const { signerEmail, signatureFields, ...otherFields } = req.body;
+  
+  console.log("upload hit - received fields:", Object.keys(req.body));
+  console.log("file info:", req.file ? { name: req.file.originalname, size: req.file.size } : 'No file');
+  
+  // Required fields validation
+  if (!otherFields.title) {
     res.status(400);
-    throw new Error('Please provide title and signer email');
+    throw new Error('Please provide title');
+  }
+  
+  if (!signerEmail) {
+    res.status(400);
+    throw new Error('Please provide signer email');
   }
   
   if (!req.file) {
@@ -51,16 +61,18 @@ import { AuthRequest } from '../middleware/authMiddleware';
     let parsedSignatureFields = [];
     if (signatureFields) {
       try {
-        parsedSignatureFields = JSON.parse(signatureFields);
+        parsedSignatureFields = typeof signatureFields === 'string' 
+          ? JSON.parse(signatureFields) 
+          : signatureFields;
       } catch (error) {
         res.status(400);
         throw new Error('Invalid signature fields format');
       }
     }
     
-    // Create document record in database
-    const document = await Document.create({
-      title,
+    // Create base document object with required fields
+    const documentData: any = {
+      title: otherFields.title,
       originalFileName: req.file.originalname,
       cloudinaryUrl: uploadResult.secure_url,
       cloudinaryPublicId: uploadResult.public_id,
@@ -69,7 +81,34 @@ import { AuthRequest } from '../middleware/authMiddleware';
       signerEmail: signer.email,
       signatureFields: parsedSignatureFields,
       status: 'pending'
-    });
+    };
+    
+    // Add any additional fields from the payload dynamically
+    // Filter out fields that shouldn't be stored directly
+    const excludedFields = ['signerEmail', 'signatureFields', 'title'];
+    const additionalFields = Object.keys(otherFields)
+      .filter(key => !excludedFields.includes(key))
+      .reduce((obj, key) => {
+        // Only add fields that exist in the Document schema or are safe to store
+        const safeFields = [
+          'description', 'category', 'priority', 'dueDate', 'tags', 
+          'metadata', 'notes', 'customFields', 'expiryDate', 'version',
+          'department', 'project', 'client', 'reference', 'type'
+        ];
+        
+        if (safeFields.includes(key) || key.startsWith('custom_')) {
+          obj[key] = otherFields[key];
+        }
+        return obj;
+      }, {} as any);
+    
+    // Merge additional fields into document data
+    Object.assign(documentData, additionalFields);
+    
+    console.log("Creating document with data:", Object.keys(documentData));
+    
+    // Create document record in database
+    const document = await Document.create(documentData);
     
     // Populate the document with user details
     const populatedDocument = await Document.findById(document._id)
@@ -79,7 +118,8 @@ import { AuthRequest } from '../middleware/authMiddleware';
     res.status(201).json({
       success: true,
       data: populatedDocument,
-      message: 'Document uploaded successfully'
+      message: 'Document uploaded successfully',
+      uploadedFields: Object.keys(documentData)
     });
     
   } catch (error) {
@@ -165,8 +205,6 @@ import { AuthRequest } from '../middleware/authMiddleware';
 // @route   PUT /api/documents/:id
 // @access  Private (Uploader only)
  const updateDocument = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { title, signerEmail, signatureFields } = req.body;
-  
   const document = await Document.findById(req.params.id);
   
   if (!document) {
@@ -174,10 +212,28 @@ import { AuthRequest } from '../middleware/authMiddleware';
     throw new Error('Document not found');
   }
   
-  // Check if user owns this document
-  if (document.uploader.toString() !== req.user!.id) {
+  // Check if user can access this document
+  const canAccess = 
+    document.uploader.toString() === req.user!.id ||
+    document.assignedSigner.toString() === req.user!.id;
+  
+  if (!canAccess) {
     res.status(403);
     throw new Error('Access denied');
+  }
+  
+  // Handle document signing (when signedPdf is provided)
+  if (req.file && req.body.status === 'signed') {
+    return handleDocumentSigning(req, res, document);
+  }
+  
+  // Regular document update
+  const { title, signerEmail, signatureFields, ...otherFields } = req.body;
+  
+  // Only uploader can update document details
+  if (document.uploader.toString() !== req.user!.id) {
+    res.status(403);
+    throw new Error('Only the uploader can update document details');
   }
   
   // Cannot update signed documents
@@ -201,12 +257,15 @@ import { AuthRequest } from '../middleware/authMiddleware';
   if (title) document.title = title;
   if (signatureFields) {
     try {
-      document.signatureFields = JSON.parse(signatureFields);
+      document.signatureFields = typeof signatureFields === 'string' 
+        ? JSON.parse(signatureFields) 
+        : signatureFields;
     } catch (error) {
       res.status(400);
       throw new Error('Invalid signature fields format');
     }
   }
+  
   
   const updatedDocument = await document.save();
   
@@ -221,6 +280,117 @@ import { AuthRequest } from '../middleware/authMiddleware';
     message: 'Document updated successfully'
   });
 });
+
+// Helper function to handle document signing
+const handleDocumentSigning = async (req: AuthRequest, res: Response, document: any) => {
+  try {
+    const { 
+      signatureImage, 
+      signerName, 
+      signerEmail, 
+      signedDate, 
+      status,
+      ...otherFields 
+    } = req.body;
+    
+    // Validate required signing fields
+    if (!signerName || !signerEmail || !signedDate) {
+      res.status(400);
+      throw new Error('Missing required signing fields');
+    }
+    
+    // Check if the signer is authorized to sign this document
+    if (document.assignedSigner.toString() !== req.user!.id) {
+      res.status(403);
+      throw new Error('Only the assigned signer can sign this document');
+    }
+    
+    // Check if document is already signed
+    if (document.status === 'signed' || document.status === 'verified') {
+      res.status(400);
+      throw new Error('Document is already signed');
+    }
+    
+    let newCloudinaryUrl = document.cloudinaryUrl;
+    let newCloudinaryPublicId = document.cloudinaryPublicId;
+    
+    // If a new PDF file is provided, replace the current one in Cloudinary
+    if (req.file) {
+      console.log('Replacing document in Cloudinary with signed version');
+      
+      // Delete the old document from Cloudinary
+      try {
+        await cloudinary.uploader.destroy(document.cloudinaryPublicId);
+        console.log('Old document deleted from Cloudinary');
+      } catch (error) {
+        console.warn('Could not delete old document from Cloudinary:', error);
+      }
+      
+      // Upload the new signed PDF to Cloudinary
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: 'auto',
+            folder: 'azaya-documents',
+            format: 'pdf',
+            public_id: `signed_${Date.now()}_${req.file!.originalname.replace(/\.[^/.]+$/, "")}`,
+            pages: true,
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        
+        uploadStream.end(req.file!.buffer);
+      }) as any;
+      
+      newCloudinaryUrl = uploadResult.secure_url;
+      newCloudinaryPublicId = uploadResult.public_id;
+    }
+    
+    // Update document with signing information
+    document.status = status || 'signed';
+    document.signedAt = new Date(signedDate);
+    document.cloudinaryUrl = newCloudinaryUrl;
+    document.cloudinaryPublicId = newCloudinaryPublicId;
+    
+    
+    // Create signature record
+    const signature = await Signature.create({
+      document: document._id,
+      signer: req.user!.id,
+      signatureData: signatureImage,
+      signerName,
+      signerEmail,
+      signedDate: new Date(signedDate),
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      signedDocumentUrl: newCloudinaryUrl,
+      signedDocumentPublicId: newCloudinaryPublicId
+    });
+    
+    // Save the updated document
+    const updatedDocument = await document.save();
+    
+    // Populate and return updated document
+    const populatedDocument = await Document.findById(updatedDocument._id)
+      .populate('uploader', 'name email role')
+      .populate('assignedSigner', 'name email role');
+    
+    res.json({
+      success: true,
+      data: populatedDocument,
+      signature: signature,
+      message: 'Document signed successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error signing document:', error);
+    res.status(500);
+    throw new Error(`Failed to sign document: ${error}`);
+  }
+};
 
 // @desc    Delete document
 // @route   DELETE /api/documents/:id

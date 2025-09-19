@@ -25,7 +25,11 @@ const upload = multer({
 
 // Middleware to validate PDF upload
 export const validatePDFUpload = (req: Request, res: Response, next: NextFunction) => {
-  const uploadSingle = upload.single('document');
+  // Check if this is a signing request (has signedPdf field) or regular upload (has document field)
+  const isSigningRequest = req.body.status === 'signed';
+  const fieldName = isSigningRequest ? 'signedPdf' : 'document';
+  
+  const uploadSingle = upload.single(fieldName);
   
   uploadSingle(req, res, (err: any) => {
     if (err instanceof multer.MulterError) {
@@ -35,9 +39,15 @@ export const validatePDFUpload = (req: Request, res: Response, next: NextFunctio
           message: 'File too large. Maximum size is 10MB.',
         });
       }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({
+          success: false,
+          message: `Unexpected field. Expected field name: ${fieldName}`,
+        });
+      }
       return res.status(400).json({
         success: false,
-        message: `Upload error: ${err.message}`,
+        message: `Upload error IN middleware: ${err}`,
       });
     } else if (err) {
       return res.status(400).json({
@@ -46,28 +56,37 @@ export const validatePDFUpload = (req: Request, res: Response, next: NextFunctio
       });
     }
     
-    // Check if file was uploaded
-    if (!req.file) {
+    // For signing requests, file is optional
+    if (isSigningRequest && !req.file) {
+      // No file provided for signing - this is allowed
+      return next();
+    }
+    
+    // For regular uploads, file is required
+    if (!isSigningRequest && !req.file) {
       return res.status(400).json({
         success: false,
         message: 'Please upload a PDF document',
       });
     }
     
-    // Additional PDF validation
-    if (req.file.mimetype !== 'application/pdf') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only PDF files are allowed',
-      });
-    }
-    
-    // Check file size again (double check)
-    if (req.file.size > 10 * 1024 * 1024) {
-      return res.status(400).json({
-        success: false,
-        message: 'File size exceeds 10MB limit',
-      });
+    // If file is provided, validate it
+    if (req.file) {
+      // Additional PDF validation
+      if (req.file.mimetype !== 'application/pdf') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only PDF files are allowed',
+        });
+      }
+      
+      // Check file size again (double check)
+      if (req.file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({
+          success: false,
+          message: 'File size exceeds 10MB limit',
+        });
+      }
     }
     
     next();

@@ -49,8 +49,8 @@ router.get('/:id', uploaderOrSigner, getDocumentById);
 
 // @desc    Update document
 // @route   PUT /api/documents/:id
-// @access  Private (Uploader only)
-router.put('/:id', uploaderOnly, updateDocument);
+// @access  Private (Uploader/Signer)
+router.put('/:id', uploaderOrSigner, validatePDFUpload, updateDocument);
 
 // @desc    Delete document
 // @route   DELETE /api/documents/:id

@@ -28,7 +28,7 @@ const signatureSchema = new Schema<ISignature>({
   },
   signatureData: {
     type: String, 
-    required: true
+    required: false
   },
   signerName: {
     type: String,
